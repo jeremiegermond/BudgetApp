@@ -1,56 +1,85 @@
 {
   "name": "budget-app",
-  "version": "1.0.0",
+  "version": "1.0.2",
   "description": "Application de gestion de budget personnelle",
   "main": "electron/main.js",
   "scripts": {
-    "install:all":    "cd backend && npm install && cd ../frontend && npm install",
-    "dev:backend":    "cd backend && npm run dev",
-    "dev:frontend":   "cd frontend && npm run dev",
-    "electron:dev":   "NODE_ENV=development electron .",
-    "dev":            "concurrently \"npm run dev:backend\" \"npm run dev:frontend\" \"wait-on http://localhost:5173 && npm run electron:dev\"",
+    "install:all": "cd backend && npm install && cd ../frontend && npm install",
+    "dev:backend": "cd backend && npm run dev",
+    "dev:frontend": "cd frontend && npm run dev",
+    "electron:dev": "NODE_ENV=development electron .",
+    "dev": "concurrently \"npm run dev:backend\" \"npm run dev:frontend\" \"wait-on http://localhost:5173 && npm run electron:dev\"",
     "build:frontend": "cd frontend && npm run build",
     "build:electron": "npm run build:frontend && electron-builder",
-    "dist":           "npm run build:electron"
+    "dist": "npm run build:electron"
   },
   "build": {
-    "appId":       "fr.perso.budget-app",
+    "appId": "fr.perso.budget-app",
     "productName": "Budget",
-    "directories": { "output": "dist-electron" },
+    "directories": {
+      "output": "dist-electron"
+    },
     "extraResources": [
-      { "from": "backend",              "to": "backend", "filter": ["**/*", "!node_modules"] },
-      { "from": "backend/node_modules", "to": "backend/node_modules" }
+      {
+        "from": "backend",
+        "to": "backend",
+        "filter": [
+          "**/*",
+          "!node_modules"
+        ]
+      },
+      {
+        "from": "backend/node_modules",
+        "to": "backend/node_modules"
+      },
+      {
+        "from": "frontend/dist",
+        "to": "frontend/dist"
+      }
     ],
     "mac": {
       "category": "public.app-category.finance",
       "icon": "electron/icon.icns",
-      "target": ["dmg", "zip"]
+      "target": [
+        "dmg",
+        "zip"
+      ]
     },
     "win": {
       "icon": "electron/icon.ico",
-      "target": ["nsis"]
+      "target": [
+        "nsis"
+      ]
     },
     "linux": {
       "icon": "electron/icon.png",
-      "target": ["AppImage", "deb"],
+      "target": [
+        "AppImage",
+        "deb"
+      ],
       "category": "Finance"
     },
     "nsis": {
       "oneClick": false,
       "allowToChangeInstallationDirectory": true,
-      "installerLanguages": ["fr_FR"],
+      "installerLanguages": [
+        "fr_FR"
+      ],
       "language": "1036"
     },
     "publish": {
       "provider": "github",
-      "owner": "TON_USERNAME",
-      "repo": "budget-app"
+      "owner": "jeremiegermond",
+      "repo": "BudgetApp"
     }
   },
   "devDependencies": {
-    "electron":         "^31.0.0",
+    "concurrently": "^8.2.2",
+    "electron": "^31.0.0",
     "electron-builder": "^24.13.3",
-    "concurrently":     "^8.2.2",
-    "wait-on":          "^7.2.0"
+    "wait-on": "^7.2.0"
+  },
+  "dependencies": {
+    "electron-updater": "^6.8.3"
   }
 }

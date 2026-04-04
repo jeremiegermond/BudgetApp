@@ -17,7 +17,9 @@ app.get('/api/health', (_, res) => res.json({ ok: true }))
 
 // In production (Electron), serve the built React frontend
 if (process.env.NODE_ENV === 'production') {
-  const distPath = path.join(__dirname, '../../../frontend/dist')
+  const distPath = process.env.RESOURCES_PATH
+    ? path.join(process.env.RESOURCES_PATH, 'frontend/dist')
+    : path.join(__dirname, '../../../frontend/dist')
   app.use(express.static(distPath))
   app.get('*', (_, res) => res.sendFile(path.join(distPath, 'index.html')))
 }
