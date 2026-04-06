@@ -122,6 +122,33 @@ async function createWindow() {
 // ── IPC handlers ──────────────────────────────────────────────────────────────
 ipcMain.handle('get-user-data-path', () => app.getPath('userData'))
 
+const CALLBACK_BASE = 'https://jeremiegermond.github.io/BudgetApp/callback'
+
+ipcMain.handle('open-bank-auth', (event, url) => {
+  return new Promise((resolve) => {
+    const authWin = new BrowserWindow({
+      width: 900, height: 700,
+      parent: mainWindow, modal: true,
+      webPreferences: { nodeIntegration: false, contextIsolation: true },
+    })
+
+    function tryCapture(navUrl) {
+      if (!navUrl.startsWith(CALLBACK_BASE)) return false
+      const params = new URL(navUrl).searchParams
+      resolve({ code: params.get('code'), state: params.get('state') })
+      setImmediate(() => authWin.close())
+      return true
+    }
+
+    authWin.webContents.on('will-navigate',  (e, u) => { if (tryCapture(u)) e.preventDefault() })
+    authWin.webContents.on('will-redirect',  (e, u) => { if (tryCapture(u)) e.preventDefault() })
+    authWin.webContents.on('did-navigate',   (e, u) => tryCapture(u))
+
+    authWin.on('closed', () => resolve(null))
+    authWin.loadURL(url)
+  })
+})
+
 // ── Auto-updater ──────────────────────────────────────────────────────────────
 function setupAutoUpdater() {
   autoUpdater.autoDownload = true

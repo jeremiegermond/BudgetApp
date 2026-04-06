@@ -21,11 +21,26 @@ export const setBudgetItem    = (data)  => api.post('/budget', data)
 export const deleteBudgetItem = (id)    => api.delete(`/budget/${id}`)
 
 // Bank (Woob)
-export const getBankBackends    = ()           => api.get('/bank/backends')
-export const getBankConnections = ()           => api.get('/bank/connections')
-export const checkBankCredentials = (data)    => api.post('/bank/check', data)
-export const connectBank        = (data)       => api.post('/bank/connect', data)
-export const syncBank           = (id)         => api.post(`/bank/sync/${id}`)
-export const disconnectBank     = (id)         => api.delete(`/bank/connection/${id}`)
+export const getBankBackends      = ()       => api.get('/bank/backends')
+export const getBankConnections   = ()       => api.get('/bank/connections')
+export const checkBankCredentials = (data)   => api.post('/bank/check', data)
+export const connectBank          = (data)   => api.post('/bank/connect', data)
+export const syncBank             = (id)     => api.post(`/bank/sync/${id}`)
+export const disconnectBank       = (id)     => api.delete(`/bank/connection/${id}`)
+
+// Recurring payments
+export const getRecurring          = ()         => api.get('/recurring')
+export const createRecurring       = (data)     => api.post('/recurring', data)
+export const updateRecurring       = (id, data) => api.patch(`/recurring/${id}`, data)
+export const deleteRecurring       = (id)       => api.delete(`/recurring/${id}`)
+export const getRecurringForecast  = (month)    => api.get(`/recurring/forecast/${month}`)
+export const autoCategorize        = (month)    => api.post('/recurring/auto-categorize', { month })
+
+// Bank (Enable Banking)
+export const getEBBanks         = ()         => api.get('/bank/eb/banks')
+export const startEBAuth        = (data)     => api.post('/bank/eb/start-auth', data)
+export const completeEBAuth     = (data)     => api.post('/bank/eb/complete-auth', data)
+export const getEBConnections   = ()         => api.get('/bank/eb/connections')
+export const disconnectEBBank   = (id)       => api.delete(`/bank/eb/connection/${id}`)
 
 export default api

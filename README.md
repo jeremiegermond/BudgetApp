@@ -1,114 +1,86 @@
-# 💰 Budget App
+# Budget App
 
 Application desktop de gestion de budget personnelle.
-Stack : **React + Electron + Node.js + SQLite + Woob**
+**React · Electron · Node.js · SQLite · Enable Banking (PSD2)**
 
 ---
 
-## 🚀 Installation
+## Installer l'application
 
-### Pré-requis
-- Node.js ≥ 18
-- Python 3 + pip (pour la liaison bancaire)
+Télécharge le dernier `.exe` depuis la page [Releases](https://github.com/jeremiegermond/BudgetApp/releases) et installe-le.
 
-### 1. Dépendances
-
-```bash
-# Backend
-cd backend && npm install
-
-# Frontend
-cd ../frontend && npm install
-
-# Root (Electron)
-cd .. && npm install
-
-# Woob (pour la synchro bancaire)
-pip install woob
-```
-
-### 2. Lancer en développement
-
-```bash
-# Terminal 1 — backend
-cd backend && npm run dev
-
-# Terminal 2 — frontend
-cd frontend && npm run dev
-
-# Terminal 3 — Electron
-NODE_ENV=development npx electron .
-```
-
-Ou tout en une commande depuis la racine :
-```bash
-npm run dev
-```
+L'application se met à jour automatiquement.
 
 ---
 
-## 📦 Compiler l'application desktop
+## Utilisation sans synchro bancaire
+
+Aucune configuration requise. Dès l'installation tu peux :
+
+- Saisir des opérations manuellement
+- Importer un relevé CSV (export depuis ton espace bancaire)
+- Créer des catégories et glisser-déposer pour catégoriser
+- Définir un budget mensuel par catégorie
+- Configurer des paiements récurrents (loyer, abonnements...)
+
+---
+
+## Activer la synchronisation bancaire automatique
+
+La synchro bancaire passe par **Enable Banking**, une API PSD2 agréée qui se connecte à ta banque via son site officiel — tes identifiants ne transitent jamais par l'app.
+
+### Étape 1 — Créer un compte Enable Banking
+
+1. Va sur [enablebanking.com](https://enablebanking.com) et crée un compte gratuit
+2. Dans le dashboard, crée une nouvelle **application**
+3. Note ton **Application ID** (format `xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx`)
+
+### Étape 2 — Générer une clé RSA
+
+Dans un terminal :
 
 ```bash
-# Build le frontend puis package Electron
-npm run dist
+openssl genrsa -out ma-cle-privee.pem 2048
+openssl rsa -in ma-cle-privee.pem -pubout -out ma-cle-publique.pem
 ```
 
-Le fichier `.dmg` / `.exe` / `.AppImage` se trouve dans `dist-electron/`.
+### Étape 3 — Enregistrer la clé publique
+
+Dans le dashboard Enable Banking → ton application → **Public keys** → colle le contenu de `ma-cle-publique.pem`.
+
+### Étape 4 — Configurer l'app
+
+1. Copie le fichier `backend/.env.example` en `backend/.env`
+2. Remplis ton Application ID :
+   ```
+   EB_APP_ID=ton-application-id-ici
+   ```
+3. Copie `ma-cle-privee.pem` dans `backend/config/` en le renommant avec ton Application ID :
+   ```
+   backend/config/ton-application-id-ici.pem
+   ```
+4. Redémarre l'application
+
+### Étape 5 — Connecter ta banque
+
+Dans l'app → **Banque** → **Connecter une banque** → choisis ta banque → authentifie-toi sur le site officiel → c'est fait.
+
+L'accès est valable **90 jours**, après quoi tu devras reconnecter.
 
 ---
 
-## 🏦 Liaison bancaire (Woob)
+## Banques supportées
 
-Woob est un outil open-source français qui se connecte directement aux sites bancaires.
-**Aucun compte tiers, aucune clé API, tout reste en local.**
-
-Banques supportées : Crédit Agricole, BNP Paribas, Société Générale, LCL, Boursorama,
-La Banque Postale, BRED, HSBC, Hello Bank, Fortuneo, ING, N26, Revolut, CIC,
-Crédit Mutuel, Caisse d'Épargne, Banque Populaire, PayPal...
-
-```bash
-pip install woob
-```
-
-Dans l'app → onglet **Banque** → Connecter une banque → entrer identifiants → Synchroniser.
+Toutes les banques françaises compatibles PSD2 : Société Générale, BNP Paribas, Crédit Agricole, LCL, Boursorama, Crédit Mutuel, Caisse d'Épargne, Banque Populaire, La Banque Postale, Hello Bank, Fortuneo, ING, N26, Revolut...
 
 ---
 
-## 📁 Structure
+## Fonctionnalités
 
-```
-budget-app/
-├── electron/
-│   ├── main.js          # Process principal Electron
-│   └── preload.js       # Bridge sécurisé
-├── frontend/            # React + Vite
-│   └── src/pages/
-│       ├── Dashboard.jsx       # Graphique donut interactif
-│       ├── Transactions.jsx    # Drag & drop
-│       ├── Budget.jsx          # Catégories + allocations
-│       └── BankSync.jsx        # Connexion Woob
-├── backend/             # Express + SQLite
-│   ├── src/
-│   │   ├── routes/      # transactions, categories, budget, bank
-│   │   ├── services/
-│   │   │   └── woob.js  # Appel Python → Woob
-│   │   └── db/index.js  # Schéma SQLite
-│   └── scripts/
-│       └── woob_fetch.py  # Script Python Woob
-└── package.json         # Config Electron + electron-builder
-```
-
----
-
-## ✨ Fonctionnalités
-
-- [x] Dashboard · graphique donut (survol → détail des opérations)
-- [x] Drag & drop pour catégoriser les opérations
-- [x] Import CSV multi-format (toutes banques françaises)
-- [x] Saisie manuelle d'opérations
-- [x] Gestion libre des catégories (nom + icône)
-- [x] Budget mensuel par catégorie + barre de progression
-- [x] Connexion bancaire locale via Woob
-- [x] Navigation par mois
-- [x] Application desktop native (Electron) — macOS / Windows / Linux
+- Dashboard avec revenus / dépenses / solde projeté
+- Paiements récurrents avec détection automatique et catégorisation
+- Drag & drop pour catégoriser les opérations
+- Import CSV (export depuis l'espace bancaire)
+- Budget mensuel par catégorie avec barre de progression
+- Synchronisation bancaire automatique au démarrage
+- Mise à jour automatique de l'application

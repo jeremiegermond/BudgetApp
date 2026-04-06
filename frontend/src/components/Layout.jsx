@@ -1,10 +1,11 @@
-import { LayoutDashboard, ArrowLeftRight, PieChart, Building2, Settings } from 'lucide-react'
+import { LayoutDashboard, ArrowLeftRight, PieChart, Building2, Settings, Repeat2 } from 'lucide-react'
 
 const nav = [
-  { id: 'dashboard',    label: 'Tableau de bord', icon: LayoutDashboard },
-  { id: 'transactions', label: 'Opérations',       icon: ArrowLeftRight },
-  { id: 'budget',       label: 'Budget',            icon: PieChart },
-  { id: 'bank',         label: 'Banque',            icon: Building2 },
+  { id: 'dashboard',    label: 'Tableau de bord',    icon: LayoutDashboard },
+  { id: 'transactions', label: 'Opérations',          icon: ArrowLeftRight },
+  { id: 'budget',       label: 'Budget',              icon: PieChart },
+  { id: 'recurring',    label: 'Paiements récurrents', icon: Repeat2 },
+  { id: 'bank',         label: 'Banque',              icon: Building2 },
 ]
 
 export default function Layout({ children, page, setPage }) {

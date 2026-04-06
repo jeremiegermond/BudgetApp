@@ -2,7 +2,11 @@ node_modules/
 dist/
 dist-electron/
 *.db
+backend/config/*.pem
 *.db-wal
 *.db-shm
 .env
 .DS_Store
+build.txt
+c80ccfa6-5853-4154-8134-6b87bf81ddb7.pem
+.claude

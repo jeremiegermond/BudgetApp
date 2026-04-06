@@ -7,18 +7,18 @@ router.get('/', (_, res) => {
 })
 
 router.post('/', (req, res) => {
-  const { name, icon } = req.body
+  const { name, icon, is_transfer } = req.body
   if (!name) return res.status(400).json({ error: 'name requis' })
-  const r = db.prepare('INSERT INTO categories (name, icon) VALUES (?, ?)').run(name, icon || '🏷️')
+  const r = db.prepare('INSERT INTO categories (name, icon, is_transfer) VALUES (?, ?, ?)').run(name, icon || '🏷️', is_transfer ? 1 : 0)
   res.status(201).json(db.prepare('SELECT * FROM categories WHERE id = ?').get(r.lastInsertRowid))
 })
 
 router.patch('/:id', (req, res) => {
-  const { name, icon } = req.body
+  const { name, icon, is_transfer } = req.body
   const cat = db.prepare('SELECT * FROM categories WHERE id = ?').get(req.params.id)
   if (!cat) return res.status(404).json({ error: 'Not found' })
-  db.prepare('UPDATE categories SET name = ?, icon = ? WHERE id = ?')
-    .run(name || cat.name, icon || cat.icon, cat.id)
+  db.prepare('UPDATE categories SET name = ?, icon = ?, is_transfer = ? WHERE id = ?')
+    .run(name ?? cat.name, icon ?? cat.icon, is_transfer !== undefined ? (is_transfer ? 1 : 0) : cat.is_transfer, cat.id)
   res.json(db.prepare('SELECT * FROM categories WHERE id = ?').get(cat.id))
 })
 

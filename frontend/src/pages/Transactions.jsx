@@ -1,7 +1,7 @@
 import { useState, useMemo } from 'react'
 import { DndContext, DragOverlay, useDraggable, useDroppable, closestCenter } from '@dnd-kit/core'
-import { Plus, Upload, ChevronLeft, ChevronRight, GripVertical, X } from 'lucide-react'
-import { updateTransaction, createTransaction, importCSV } from '../services/api.js'
+import { Plus, Upload, ChevronLeft, ChevronRight, GripVertical, FolderPlus, Clock } from 'lucide-react'
+import { updateTransaction, createTransaction, importCSV, createCategory } from '../services/api.js'
 
 const MONTHS_FR = ['Janvier','Février','Mars','Avril','Mai','Juin','Juillet','Août','Septembre','Octobre','Novembre','Décembre']
 
@@ -39,10 +39,55 @@ function DroppableColumn({ id, title, color, transactions, count }) {
       <div ref={setNodeRef} className={`dnd-items ${isOver ? 'dnd-drop-zone over' : ''}`} style={{ minHeight: 80 }}>
         {transactions.map(t => <DraggableItem key={t.id} transaction={t} />)}
         {transactions.length === 0 && (
-          <div className="dnd-drop-zone" style={{ margin: 4 }}>
-            Déposer ici
-          </div>
+          <div className="dnd-drop-zone" style={{ margin: 4 }}>Déposer ici</div>
         )}
+      </div>
+    </div>
+  )
+}
+
+const COMMON_EMOJIS = ['🏷️','🛒','🚗','🏠','💊','📱','💰','🍽️','🎮','✈️','👗','🎓','🐾','🎁','⚡','🏋️','🚇','🎬','📚','🏥','🔧','💻','🌍','↔️']
+
+function AddCategoryModal({ onClose, onSave }) {
+  const [name, setName]         = useState('')
+  const [icon, setIcon]         = useState('🏷️')
+  const [isTransfer, setIsTransfer] = useState(false)
+  const [saving, setSaving]     = useState(false)
+
+  async function submit() {
+    if (!name.trim()) return
+    setSaving(true)
+    try { await onSave({ name: name.trim(), icon, is_transfer: isTransfer }); onClose() }
+    finally { setSaving(false) }
+  }
+
+  return (
+    <div className="modal-overlay" onClick={onClose}>
+      <div className="modal" style={{ maxWidth: 380 }} onClick={e => e.stopPropagation()}>
+        <div className="modal-title">Nouvelle catégorie</div>
+        <div className="form-group">
+          <label className="form-label">Nom</label>
+          <input className="form-input" value={name} onChange={e => setName(e.target.value)} placeholder="Ex: Vacances" autoFocus />
+        </div>
+        <div className="form-group">
+          <label className="form-label">Icône</label>
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginBottom: 8 }}>
+            {COMMON_EMOJIS.map(e => (
+              <button key={e} onClick={() => setIcon(e)}
+                style={{ width: 34, height: 34, borderRadius: 6, border: `1.5px solid ${icon === e ? 'var(--amber)' : 'var(--border)'}`, background: icon === e ? 'rgba(245,166,35,0.1)' : 'var(--bg-raised)', fontSize: 16, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                {e}
+              </button>
+            ))}
+          </div>
+        </div>
+        <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 13, color: 'var(--text-secondary)', cursor: 'pointer', marginBottom: 16 }}>
+          <input type="checkbox" checked={isTransfer} onChange={e => setIsTransfer(e.target.checked)} />
+          Catégorie virement (exclue des stats revenus/dépenses)
+        </label>
+        <div className="modal-actions">
+          <button className="btn btn-secondary" onClick={onClose}>Annuler</button>
+          <button className="btn btn-primary" onClick={submit} disabled={saving || !name.trim()}>Créer</button>
+        </div>
       </div>
     </div>
   )
@@ -92,10 +137,11 @@ function AddTransactionModal({ onClose, onSave, categories }) {
   )
 }
 
-export default function Transactions({ categories, transactions, month, setMonth, reload, showToast, loading, CATEGORY_COLORS }) {
-  const [activeId, setActiveId]   = useState(null)
-  const [showAdd, setShowAdd]     = useState(false)
-  const [importing, setImporting] = useState(false)
+export default function Transactions({ categories, transactions, forecast = [], month, setMonth, reload, showToast, CATEGORY_COLORS }) {
+  const [activeId, setActiveId]     = useState(null)
+  const [showAdd, setShowAdd]       = useState(false)
+  const [showAddCat, setShowAddCat] = useState(false)
+  const [importing, setImporting]   = useState(false)
 
   const [year, mon] = month.split('-').map(Number)
   function changeMonth(delta) {
@@ -104,7 +150,7 @@ export default function Transactions({ categories, transactions, month, setMonth
   }
 
   const grouped = useMemo(() => {
-    const uncategorized = transactions.filter(t => !t.category_id && t.amount < 0)
+    const uncategorized = transactions.filter(t => !t.category_id)
     const byCat = categories.map((cat, i) => ({
       ...cat,
       color: CATEGORY_COLORS[i % CATEGORY_COLORS.length],
@@ -114,6 +160,7 @@ export default function Transactions({ categories, transactions, month, setMonth
   }, [transactions, categories, CATEGORY_COLORS])
 
   const activeTransaction = activeId ? transactions.find(t => t.id === activeId) : null
+  const pendingRecurring  = useMemo(() => forecast.filter(f => !f.matched_transaction_id), [forecast])
 
   async function handleDragEnd({ active, over }) {
     setActiveId(null)
@@ -125,7 +172,7 @@ export default function Transactions({ categories, transactions, month, setMonth
       await updateTransaction(active.id, { category_id: targetCatId })
       await reload()
       showToast('Catégorie mise à jour', 'success')
-    } catch (e) {
+    } catch {
       showToast('Erreur lors de la mise à jour', 'error')
     }
   }
@@ -164,6 +211,9 @@ export default function Transactions({ categories, transactions, month, setMonth
             {importing ? 'Import...' : 'Import CSV'}
             <input type="file" accept=".csv" style={{ display: 'none' }} onChange={handleCSV} />
           </label>
+          <button className="btn btn-secondary" onClick={() => setShowAddCat(true)}>
+            <FolderPlus size={14} /> Catégorie
+          </button>
           <button className="btn btn-primary" onClick={() => setShowAdd(true)}>
             <Plus size={14} /> Ajouter
           </button>
@@ -177,7 +227,6 @@ export default function Transactions({ categories, transactions, month, setMonth
           onDragEnd={handleDragEnd}
         >
           <div className="dnd-board">
-            {/* Uncategorized column */}
             <div>
               <DroppableColumn
                 id="uncategorized"
@@ -187,8 +236,6 @@ export default function Transactions({ categories, transactions, month, setMonth
                 count={grouped.uncategorized.length}
               />
             </div>
-
-            {/* Category columns */}
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 14 }}>
               {grouped.byCat.map(cat => (
                 <DroppableColumn
@@ -215,6 +262,39 @@ export default function Transactions({ categories, transactions, month, setMonth
             )}
           </DragOverlay>
         </DndContext>
+
+        {pendingRecurring.length > 0 && (
+          <div className="card mt-4">
+            <div className="card-header">
+              <span className="card-title" style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                <Clock size={14} style={{ color: 'var(--amber)' }} /> À venir ce mois
+              </span>
+            </div>
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
+              {pendingRecurring.map(f => {
+                const cat = categories.find(c => c.id === f.category_id)
+                return (
+                  <div key={f.id} style={{
+                    display: 'flex', alignItems: 'center', gap: 10, padding: '8px 12px',
+                    borderRadius: 'var(--radius)', border: '1px dashed rgba(245,166,35,0.35)',
+                    background: 'rgba(245,166,35,0.05)',
+                  }}>
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <div style={{ fontSize: 13, fontWeight: 500 }}>{f.name}</div>
+                      <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>
+                        Prévu le {new Date(f.expected_date).toLocaleDateString('fr-FR')}
+                        {cat && <span> · {cat.icon} {cat.name}</span>}
+                      </div>
+                    </div>
+                    <span style={{ fontFamily: 'var(--font-mono)', fontSize: 13, color: f.amount < 0 ? 'var(--coral)' : 'var(--green)', flexShrink: 0 }}>
+                      {fmt(f.amount)}
+                    </span>
+                  </div>
+                )
+              })}
+            </div>
+          </div>
+        )}
       </div>
 
       {showAdd && (
@@ -222,6 +302,12 @@ export default function Transactions({ categories, transactions, month, setMonth
           categories={categories}
           onClose={() => setShowAdd(false)}
           onSave={async (data) => { await createTransaction(data); await reload(); showToast('Opération ajoutée', 'success') }}
+        />
+      )}
+      {showAddCat && (
+        <AddCategoryModal
+          onClose={() => setShowAddCat(false)}
+          onSave={async (data) => { await createCategory(data); await reload(); showToast('Catégorie créée', 'success') }}
         />
       )}
     </>

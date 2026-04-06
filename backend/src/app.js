@@ -13,6 +13,7 @@ app.use('/api/transactions', require('./routes/transactions'))
 app.use('/api/categories',   require('./routes/categories'))
 app.use('/api/budget',       require('./routes/budget'))
 app.use('/api/bank',         require('./routes/bank'))
+app.use('/api/recurring',    require('./routes/recurring'))
 app.get('/api/health', (_, res) => res.json({ ok: true }))
 
 // In production (Electron), serve the built React frontend
