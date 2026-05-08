@@ -3,25 +3,77 @@ const fs     = require('fs')
 const path   = require('path')
 const fetch  = require('node-fetch')
 
-const APP_ID       = process.env.EB_APP_ID
 const BASE         = 'https://api.enablebanking.com'
 const REDIRECT_URL = process.env.EB_REDIRECT_URL || 'https://jeremiegermond.github.io/BudgetApp/callback'
 
-// Load private key
+// Config persisted under userData (writable both in dev and packaged app).
+const USER_DATA = process.env.USER_DATA_PATH || path.join(__dirname, '../../config')
+const CONFIG_PATH = path.join(USER_DATA, 'eb-config.json')
+const KEY_PATH    = path.join(USER_DATA, 'eb-key.pem')
+
+let APP_ID     = null
 let privateKey = null
-if (!APP_ID) {
-  console.warn('[enablebanking] EB_APP_ID non configuré — Enable Banking désactivé')
+
+function loadConfig() {
+  APP_ID = null
+  privateKey = null
+
+  // 1. Try userData (UI-configured)
+  try {
+    if (fs.existsSync(CONFIG_PATH)) {
+      const cfg = JSON.parse(fs.readFileSync(CONFIG_PATH, 'utf-8'))
+      APP_ID = cfg.app_id || null
+    }
+    if (fs.existsSync(KEY_PATH)) {
+      privateKey = fs.readFileSync(KEY_PATH, 'utf-8')
+    }
+  } catch (e) {
+    console.warn('[enablebanking] config load error:', e.message)
+  }
+
+  // 2. Fallback to legacy env-based config (.env + backend/config/<app_id>.pem)
+  if (!APP_ID && process.env.EB_APP_ID) {
+    APP_ID = process.env.EB_APP_ID
+    if (!privateKey) {
+      const candidates = [
+        path.join(__dirname, `../../config/${APP_ID}.pem`),
+        process.env.RESOURCES_PATH && path.join(process.env.RESOURCES_PATH, `backend/config/${APP_ID}.pem`),
+      ].filter(Boolean)
+      for (const p of candidates) {
+        try { privateKey = fs.readFileSync(p, 'utf-8'); break } catch {}
+      }
+    }
+  }
+
+  if (!APP_ID)     console.warn('[enablebanking] EB_APP_ID non configuré — Enable Banking désactivé')
+  if (!privateKey) console.warn('[enablebanking] Private key not found — Enable Banking disabled')
 }
 
-const keyPaths = APP_ID ? [
-  path.join(__dirname, `../../config/${APP_ID}.pem`),
-  process.env.RESOURCES_PATH && path.join(process.env.RESOURCES_PATH, `backend/config/${APP_ID}.pem`),
-].filter(Boolean) : []
+function saveConfig({ app_id, private_key }) {
+  if (!app_id || !private_key) throw new Error('app_id et private_key requis')
 
-for (const p of keyPaths) {
-  try { privateKey = fs.readFileSync(p, 'utf-8'); break } catch {}
+  // Validate the key actually parses as a PEM private key before persisting.
+  try { crypto.createPrivateKey(private_key) }
+  catch (e) { throw new Error('Clé privée invalide : ' + e.message) }
+
+  fs.mkdirSync(USER_DATA, { recursive: true })
+  fs.writeFileSync(CONFIG_PATH, JSON.stringify({ app_id }, null, 2), 'utf-8')
+  fs.writeFileSync(KEY_PATH, private_key, { encoding: 'utf-8', mode: 0o600 })
+
+  loadConfig()
 }
-if (!privateKey) console.warn('[enablebanking] Private key not found — Enable Banking disabled')
+
+function clearConfig() {
+  try { fs.unlinkSync(CONFIG_PATH) } catch {}
+  try { fs.unlinkSync(KEY_PATH) } catch {}
+  loadConfig()
+}
+
+function getStatus() {
+  return { configured: !!APP_ID && !!privateKey, app_id: APP_ID || null }
+}
+
+loadConfig()
 
 // ── JWT ──────────────────────────────────────────────────────────────────────
 
@@ -74,7 +126,6 @@ let _aspspsCache = null
 let _aspspsCacheTime = 0
 
 async function getAspsps(country = 'FR') {
-  // Cache for 1 hour
   if (_aspspsCache && Date.now() - _aspspsCacheTime < 3600_000) return _aspspsCache
   const data = await call('GET', `/aspsps?country=${country}`)
   _aspspsCache = data
@@ -120,12 +171,10 @@ async function getTransactions(accountUid, dateFrom, dateTo) {
 
     const data = await call('GET', url)
     const page = data.transactions || []
-    console.log(`[eb getTransactions] page: ${page.length} tx, continuation_key: ${data.continuation_key || 'none'}, keys in response: ${Object.keys(data).join(', ')}`)
     allTx = allTx.concat(page)
     continuationKey = data.continuation_key || null
   } while (continuationKey)
 
-  console.log(`[eb getTransactions] total fetched: ${allTx.length}`)
   return allTx
 }
 
@@ -137,4 +186,8 @@ function isAvailable() {
   return !!privateKey && !!APP_ID
 }
 
-module.exports = { getAspsps, startAuth, createSession, getSession, getSessionAccounts, getTransactions, getBalances, isAvailable, REDIRECT_URL }
+module.exports = {
+  getAspsps, startAuth, createSession, getSession, getSessionAccounts,
+  getTransactions, getBalances, isAvailable, REDIRECT_URL,
+  getStatus, saveConfig, clearConfig,
+}

@@ -42,5 +42,8 @@ export const startEBAuth        = (data)     => api.post('/bank/eb/start-auth', 
 export const completeEBAuth     = (data)     => api.post('/bank/eb/complete-auth', data)
 export const getEBConnections   = ()         => api.get('/bank/eb/connections')
 export const disconnectEBBank   = (id)       => api.delete(`/bank/eb/connection/${id}`)
+export const getEBConfig        = ()         => api.get('/bank/eb/config')
+export const setEBConfig        = (data)     => api.post('/bank/eb/config', data)
+export const clearEBConfig      = ()         => api.delete('/bank/eb/config')
 
 export default api

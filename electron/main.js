@@ -39,6 +39,7 @@ function startBackend() {
       PORT,
       NODE_ENV: 'production',
       DB_PATH: path.join(app.getPath('userData'), 'budget.db'),
+      USER_DATA_PATH: app.getPath('userData'),
       FRONTEND_URL: `http://localhost:${PORT}`,
       RESOURCES_PATH: process.resourcesPath,
     },

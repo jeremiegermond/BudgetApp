@@ -1,6 +1,9 @@
 import { useState, useEffect } from 'react'
-import { Building2, RefreshCw, Unlink, Plus, AlertCircle, Search, ChevronRight, ShieldCheck } from 'lucide-react'
-import { getEBBanks, startEBAuth, completeEBAuth, getEBConnections, disconnectEBBank } from '../services/api.js'
+import { Building2, RefreshCw, Unlink, Plus, AlertCircle, Search, ChevronRight, ShieldCheck, Settings, KeyRound, ExternalLink } from 'lucide-react'
+import {
+  getEBBanks, startEBAuth, completeEBAuth, getEBConnections, disconnectEBBank,
+  getEBConfig, setEBConfig, clearEBConfig,
+} from '../services/api.js'
 
 // ── Connect modal ─────────────────────────────────────────────────────────────
 
@@ -113,6 +116,100 @@ function ConnectModal({ onClose, onSuccess, showToast }) {
   )
 }
 
+// ── Config modal ──────────────────────────────────────────────────────────────
+
+function ConfigModal({ initialAppId, onClose, onSaved, showToast }) {
+  const [appId, setAppId]     = useState(initialAppId || '')
+  const [key, setKey]         = useState('')
+  const [saving, setSaving]   = useState(false)
+  const [error, setError]     = useState(null)
+
+  async function submit() {
+    if (!appId.trim() || !key.trim()) {
+      setError('Application ID et clé privée requis')
+      return
+    }
+    setSaving(true)
+    setError(null)
+    try {
+      await setEBConfig({ app_id: appId.trim(), private_key: key })
+      showToast('Enable Banking configuré', 'success')
+      onSaved()
+      onClose()
+    } catch (e) {
+      setError(e?.response?.data?.error || e.message || 'Erreur lors de l\'enregistrement')
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  async function onPickFile(e) {
+    const file = e.target.files[0]
+    if (!file) return
+    const text = await file.text()
+    setKey(text)
+  }
+
+  return (
+    <div className="modal-overlay" onClick={onClose}>
+      <div className="modal" style={{ maxWidth: 560 }} onClick={e => e.stopPropagation()}>
+        <div className="modal-title" style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+          <KeyRound size={18} style={{ color: 'var(--amber)' }} />
+          Configuration Enable Banking
+        </div>
+
+        <div style={{ background: 'rgba(77,158,247,0.07)', border: '1px solid rgba(77,158,247,0.15)', borderRadius: 'var(--radius)', padding: '10px 14px', marginBottom: 16, fontSize: 12.5, color: 'var(--text-secondary)', lineHeight: 1.6 }}>
+            Tu as besoin d'un compte sur{' '}
+            <a href="https://enablebanking.com" target="_blank" rel="noreferrer" style={{ color: 'var(--blue)' }}>
+              enablebanking.com <ExternalLink size={11} style={{ verticalAlign: 'middle' }} />
+            </a>
+            {' '}avec une application créée et une paire de clés RSA. La clé publique va sur leur dashboard, la clé privée ici.
+        </div>
+
+        {error && (
+          <div style={{ display: 'flex', gap: 8, padding: '10px 14px', borderRadius: 'var(--radius)', marginBottom: 12, background: 'rgba(240,106,106,0.08)', border: '1px solid rgba(240,106,106,0.2)', fontSize: 12.5, color: 'var(--coral)' }}>
+            <AlertCircle size={14} style={{ flexShrink: 0, marginTop: 1 }} />
+            {error}
+          </div>
+        )}
+
+        <div className="form-group">
+          <label className="form-label">Application ID</label>
+          <input className="form-input" value={appId} onChange={e => setAppId(e.target.value)} placeholder="xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx" autoFocus />
+        </div>
+
+        <div className="form-group">
+          <label className="form-label" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+            <span>Clé privée RSA (.pem)</span>
+            <label className="btn btn-secondary btn-sm" style={{ cursor: 'pointer', fontSize: 11 }}>
+              Charger un fichier
+              <input type="file" accept=".pem,.key,.txt" style={{ display: 'none' }} onChange={onPickFile} />
+            </label>
+          </label>
+          <textarea
+            className="form-input"
+            style={{ minHeight: 140, fontFamily: 'var(--font-mono)', fontSize: 11, lineHeight: 1.4 }}
+            value={key}
+            onChange={e => setKey(e.target.value)}
+            placeholder="-----BEGIN PRIVATE KEY-----&#10;...&#10;-----END PRIVATE KEY-----"
+            spellCheck={false}
+          />
+          <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 4 }}>
+            La clé est stockée localement uniquement dans le dossier de données de l'app.
+          </div>
+        </div>
+
+        <div className="modal-actions">
+          <button className="btn btn-secondary" onClick={onClose} disabled={saving}>Annuler</button>
+          <button className="btn btn-primary" onClick={submit} disabled={saving || !appId.trim() || !key.trim()}>
+            {saving ? 'Enregistrement…' : 'Enregistrer'}
+          </button>
+        </div>
+      </div>
+    </div>
+  )
+}
+
 // ── Main page ─────────────────────────────────────────────────────────────────
 
 export default function BankSync({ reload, showToast }) {
@@ -121,6 +218,15 @@ export default function BankSync({ reload, showToast }) {
   const [syncing, setSyncing]         = useState({})
   const [syncStatus, setSyncStatus]   = useState({})
   const [showLink, setShowLink]       = useState(false)
+  const [showConfig, setShowConfig]   = useState(false)
+  const [config, setConfig]           = useState({ configured: false, app_id: null })
+
+  async function loadConfig() {
+    try {
+      const r = await getEBConfig()
+      setConfig(r.data)
+    } catch {}
+  }
 
   async function loadConnections() {
     try {
@@ -134,7 +240,16 @@ export default function BankSync({ reload, showToast }) {
     }
   }
 
-  useEffect(() => { loadConnections() }, [])
+  useEffect(() => { loadConfig(); loadConnections() }, [])
+
+  async function resetConfig() {
+    if (!confirm('Supprimer la configuration Enable Banking ? Les connexions existantes ne pourront plus se synchroniser.')) return
+    try {
+      await clearEBConfig()
+      await loadConfig()
+      showToast('Configuration supprimée', 'success')
+    } catch { showToast('Erreur', 'error') }
+  }
 
   async function sync(conn) {
     setSyncing(s => ({ ...s, [conn.id]: true }))
@@ -204,12 +319,48 @@ export default function BankSync({ reload, showToast }) {
           <h1 className="page-title">Connexion bancaire</h1>
           <p className="page-subtitle">Synchronisation via Enable Banking — authentification sécurisée</p>
         </div>
-        <button className="btn btn-primary" onClick={() => setShowLink(true)}>
-          <Plus size={14} /> Connecter une banque
-        </button>
+        <div style={{ display: 'flex', gap: 8 }}>
+          <button className="btn btn-secondary" onClick={() => setShowConfig(true)}>
+            <Settings size={14} /> {config.configured ? 'Configuration' : 'Configurer'}
+          </button>
+          <button className="btn btn-primary" onClick={() => setShowLink(true)} disabled={!config.configured}>
+            <Plus size={14} /> Connecter une banque
+          </button>
+        </div>
       </div>
 
       <div className="page-body">
+        {!config.configured && (
+          <div className="card mb-4" style={{ borderColor: 'rgba(245,166,35,0.3)', background: 'rgba(245,166,35,0.04)' }}>
+            <div style={{ display: 'flex', gap: 14, alignItems: 'flex-start' }}>
+              <KeyRound size={18} style={{ color: 'var(--amber)', flexShrink: 0, marginTop: 2 }} />
+              <div style={{ flex: 1 }}>
+                <div style={{ fontSize: 14, fontWeight: 600, marginBottom: 4 }}>Enable Banking n'est pas encore configuré</div>
+                <div style={{ fontSize: 12.5, color: 'var(--text-secondary)', lineHeight: 1.5, marginBottom: 12 }}>
+                  Pour pouvoir connecter ta banque, tu dois d'abord créer un compte gratuit sur enablebanking.com,
+                  générer une paire de clés RSA, et coller ton Application ID + ta clé privée ici.
+                </div>
+                <button className="btn btn-primary btn-sm" onClick={() => setShowConfig(true)}>
+                  <Settings size={12} /> Configurer maintenant
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {config.configured && (
+          <div className="card mb-4" style={{ background: 'rgba(62,207,142,0.04)', borderColor: 'rgba(62,207,142,0.2)' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 10, fontSize: 12.5 }}>
+              <ShieldCheck size={14} style={{ color: 'var(--green)' }} />
+              <span style={{ flex: 1, color: 'var(--text-secondary)' }}>
+                Enable Banking configuré · App ID : <span style={{ fontFamily: 'var(--font-mono)' }}>{config.app_id?.slice(0, 8)}…</span>
+              </span>
+              <button className="btn btn-secondary btn-sm" onClick={() => setShowConfig(true)}>Modifier</button>
+              <button className="btn btn-danger btn-sm" onClick={resetConfig}>Supprimer</button>
+            </div>
+          </div>
+        )}
+
         <div className="card mb-4">
           <div className="card-header"><span className="card-title">Comment ça marche</span></div>
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3,1fr)', gap: 20 }}>
@@ -278,6 +429,14 @@ export default function BankSync({ reload, showToast }) {
       </div>
 
       {showLink && <ConnectModal onClose={() => setShowLink(false)} onSuccess={loadConnections} showToast={showToast} />}
+      {showConfig && (
+        <ConfigModal
+          initialAppId={config.app_id}
+          onClose={() => setShowConfig(false)}
+          onSaved={loadConfig}
+          showToast={showToast}
+        />
+      )}
       <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
     </>
   )

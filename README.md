@@ -50,16 +50,9 @@ Dans le dashboard Enable Banking → ton application → **Public keys** → col
 
 ### Étape 4 — Configurer l'app
 
-1. Copie le fichier `backend/.env.example` en `backend/.env`
-2. Remplis ton Application ID :
-   ```
-   EB_APP_ID=ton-application-id-ici
-   ```
-3. Copie `ma-cle-privee.pem` dans `backend/config/` en le renommant avec ton Application ID :
-   ```
-   backend/config/ton-application-id-ici.pem
-   ```
-4. Redémarre l'application
+Dans l'app → **Banque** → **Configurer** → colle ton Application ID + le contenu de `ma-cle-privee.pem` (ou charge le fichier directement). C'est tout, pas besoin d'éditer de fichier `.env`.
+
+La config est stockée localement dans le dossier de données de l'app (jamais envoyée à l'extérieur).
 
 ### Étape 5 — Connecter ta banque
 

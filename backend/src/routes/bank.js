@@ -123,6 +123,28 @@ router.delete('/connection/:id', (req, res) => {
 
 // ── Enable Banking routes ─────────────────────────────────────────────────────
 
+// GET /api/bank/eb/config  — état de la configuration
+router.get('/eb/config', (req, res) => {
+  res.json(eb.getStatus())
+})
+
+// POST /api/bank/eb/config  — enregistrer App ID + clé privée
+router.post('/eb/config', (req, res) => {
+  const { app_id, private_key } = req.body
+  try {
+    eb.saveConfig({ app_id: (app_id || '').trim(), private_key: (private_key || '').trim() })
+    res.json(eb.getStatus())
+  } catch (e) {
+    res.status(400).json({ error: e.message })
+  }
+})
+
+// DELETE /api/bank/eb/config  — supprimer la configuration
+router.delete('/eb/config', (req, res) => {
+  eb.clearConfig()
+  res.status(204).send()
+})
+
 // GET /api/bank/eb/banks  — liste les banques disponibles
 router.get('/eb/banks', async (req, res) => {
   if (!eb.isAvailable()) return res.status(503).json({ error: 'Enable Banking non configuré' })
