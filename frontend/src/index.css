@@ -544,12 +544,33 @@ select.form-input {
   border-radius: var(--radius);
   padding: 10px 12px;
   margin-bottom: 6px;
-  cursor: grab;
   display: flex;
   align-items: center;
   gap: 10px;
   transition: all 0.15s;
   user-select: none;
+}
+
+.dnd-item-handle { cursor: grab; display: flex; align-items: center; }
+.dnd-item-label  { cursor: grab; }
+
+.dnd-item-delete {
+  background: transparent;
+  border: none;
+  color: var(--text-muted);
+  cursor: pointer;
+  padding: 4px;
+  border-radius: 4px;
+  display: flex;
+  align-items: center;
+  opacity: 0;
+  transition: opacity 0.15s, color 0.15s, background 0.15s;
+  flex-shrink: 0;
+}
+.dnd-item:hover .dnd-item-delete { opacity: 1; }
+.dnd-item-delete:hover {
+  color: var(--coral);
+  background: rgba(240,106,106,0.1);
 }
 
 .dnd-item:last-child { margin-bottom: 0; }
@@ -836,6 +857,12 @@ select.form-input {
 .toast.success { border-left: 3px solid var(--green); }
 .toast.error   { border-left: 3px solid var(--coral); }
 .toast.info    { border-left: 3px solid var(--blue);  }
+
+.spin { animation: spin 1.2s linear infinite; }
+@keyframes spin {
+  from { transform: rotate(0deg); }
+  to   { transform: rotate(360deg); }
+}
 
 /* Misc */
 .text-mono { font-family: var(--font-mono); }

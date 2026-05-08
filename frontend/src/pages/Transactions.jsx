@@ -1,7 +1,7 @@
 import { useState, useMemo } from 'react'
 import { DndContext, DragOverlay, useDraggable, useDroppable, closestCenter } from '@dnd-kit/core'
-import { Plus, Upload, ChevronLeft, ChevronRight, GripVertical, FolderPlus, Clock } from 'lucide-react'
-import { updateTransaction, createTransaction, importCSV, createCategory } from '../services/api.js'
+import { Plus, Upload, ChevronLeft, ChevronRight, GripVertical, FolderPlus, Clock, Trash2 } from 'lucide-react'
+import { updateTransaction, createTransaction, importCSV, createCategory, deleteTransaction } from '../services/api.js'
 
 const MONTHS_FR = ['Janvier','Février','Mars','Avril','Mai','Juin','Juillet','Août','Septembre','Octobre','Novembre','Décembre']
 
@@ -9,23 +9,34 @@ function fmt(amount) {
   return new Intl.NumberFormat('fr-FR', { style: 'currency', currency: 'EUR' }).format(amount)
 }
 
-function DraggableItem({ transaction }) {
+function DraggableItem({ transaction, onDelete }) {
   const { attributes, listeners, setNodeRef, transform, isDragging } = useDraggable({ id: transaction.id })
   const style = transform ? { transform: `translate(${transform.x}px, ${transform.y}px)`, zIndex: 50 } : {}
   return (
-    <div ref={setNodeRef} style={style} {...attributes} {...listeners}
+    <div ref={setNodeRef} style={style}
       className={`dnd-item ${isDragging ? 'dragging' : ''}`}>
-      <GripVertical size={12} style={{ color: 'var(--text-muted)', flexShrink: 0 }} />
-      <span className="dnd-item-label">{transaction.label}</span>
+      <span {...attributes} {...listeners} className="dnd-item-handle">
+        <GripVertical size={12} style={{ color: 'var(--text-muted)', flexShrink: 0 }} />
+      </span>
+      <span {...attributes} {...listeners} className="dnd-item-label">{transaction.label}</span>
       <span className="dnd-item-date">{new Date(transaction.date).toLocaleDateString('fr-FR', { day: '2-digit', month: '2-digit' })}</span>
       <span className={`dnd-item-amount ${transaction.amount < 0 ? 'amount-negative' : 'amount-positive'}`}>
         {fmt(transaction.amount)}
       </span>
+      <button
+        className="dnd-item-delete"
+        onPointerDown={(e) => e.stopPropagation()}
+        onClick={(e) => { e.stopPropagation(); onDelete(transaction) }}
+        title="Supprimer cette opération"
+        aria-label="Supprimer"
+      >
+        <Trash2 size={12} />
+      </button>
     </div>
   )
 }
 
-function DroppableColumn({ id, title, color, transactions, count }) {
+function DroppableColumn({ id, title, color, transactions, count, onDelete }) {
   const { setNodeRef, isOver } = useDroppable({ id })
   return (
     <div className="dnd-column" style={{ borderTop: `2px solid ${color}` }}>
@@ -37,7 +48,7 @@ function DroppableColumn({ id, title, color, transactions, count }) {
         <span className="dnd-column-count">{count}</span>
       </div>
       <div ref={setNodeRef} className={`dnd-items ${isOver ? 'dnd-drop-zone over' : ''}`} style={{ minHeight: 80 }}>
-        {transactions.map(t => <DraggableItem key={t.id} transaction={t} />)}
+        {transactions.map(t => <DraggableItem key={t.id} transaction={t} onDelete={onDelete} />)}
         {transactions.length === 0 && (
           <div className="dnd-drop-zone" style={{ margin: 4 }}>Déposer ici</div>
         )}
@@ -177,6 +188,20 @@ export default function Transactions({ categories, transactions, forecast = [], 
     }
   }
 
+  async function handleDelete(tx) {
+    const ok = window.confirm(
+      `Supprimer définitivement cette opération ?\n\n${tx.label}\n${fmt(tx.amount)} — ${new Date(tx.date).toLocaleDateString('fr-FR')}`
+    )
+    if (!ok) return
+    try {
+      await deleteTransaction(tx.id)
+      await reload()
+      showToast('Opération supprimée', 'success')
+    } catch {
+      showToast('Erreur lors de la suppression', 'error')
+    }
+  }
+
   async function handleCSV(e) {
     const file = e.target.files[0]
     if (!file) return
@@ -234,6 +259,7 @@ export default function Transactions({ categories, transactions, forecast = [], 
                 color="var(--amber)"
                 transactions={grouped.uncategorized}
                 count={grouped.uncategorized.length}
+                onDelete={handleDelete}
               />
             </div>
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 14 }}>
@@ -245,6 +271,7 @@ export default function Transactions({ categories, transactions, forecast = [], 
                   color={cat.color}
                   transactions={cat.transactions}
                   count={cat.transactions.length}
+                  onDelete={handleDelete}
                 />
               ))}
             </div>

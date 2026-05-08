@@ -1,6 +1,7 @@
 const { app, BrowserWindow, shell, ipcMain, Menu, dialog } = require('electron')
 const path   = require('path')
-const { spawn, execSync } = require('child_process')
+const fs     = require('fs')
+const { spawn } = require('child_process')
 const http   = require('http')
 const { autoUpdater } = require('electron-updater')
 
@@ -9,32 +10,51 @@ const PORT   = 3001
 let backendProcess = null
 let mainWindow     = null
 
+// ── Logging to file (for diagnosing fresh-install issues) ───────────────────
+const logFile = path.join(app.getPath('userData'), 'budget-app.log')
+function log(...args) {
+  const line = `[${new Date().toISOString()}] ${args.join(' ')}\n`
+  try { fs.appendFileSync(logFile, line) } catch {}
+  console.log(...args)
+}
+process.on('uncaughtException', (err) => {
+  log('UNCAUGHT EXCEPTION:', err.stack || err.message)
+})
+
 // ── Start embedded Express backend ──────────────────────────────────────────
 function startBackend() {
   const backendEntry = isDev
     ? path.join(__dirname, '../backend/src/app.js')
     : path.join(process.resourcesPath, 'backend/src/app.js')
 
-  backendProcess = spawn('node', [backendEntry], {
+  log('Starting backend:', backendEntry)
+  log('Using runtime:', process.execPath)
+
+  // Use Electron's bundled Node (ELECTRON_RUN_AS_NODE=1) so users don't need
+  // a system Node.js installed. process.execPath points to the Electron binary.
+  backendProcess = spawn(process.execPath, [backendEntry], {
     env: {
       ...process.env,
+      ELECTRON_RUN_AS_NODE: '1',
       PORT,
       NODE_ENV: 'production',
       DB_PATH: path.join(app.getPath('userData'), 'budget.db'),
       FRONTEND_URL: `http://localhost:${PORT}`,
       RESOURCES_PATH: process.resourcesPath,
     },
-    stdio: isDev ? 'inherit' : 'pipe',
+    stdio: ['ignore', 'pipe', 'pipe'],
   })
 
-  backendProcess.on('error', (err) => console.error('Backend error:', err))
-  backendProcess.on('exit',  (code) => {
-    if (code !== 0 && code !== null) console.error('Backend exited with code', code)
+  backendProcess.stdout.on('data', (d) => log('[backend]', d.toString().trim()))
+  backendProcess.stderr.on('data', (d) => log('[backend:err]', d.toString().trim()))
+  backendProcess.on('error', (err) => log('Backend spawn error:', err.message))
+  backendProcess.on('exit', (code) => {
+    if (code !== 0 && code !== null) log('Backend exited with code', code)
   })
 }
 
 // ── Wait for backend to be ready ─────────────────────────────────────────────
-function waitForBackend(retries = 30) {
+function waitForBackend(retries = 50) {
   return new Promise((resolve, reject) => {
     const check = (n) => {
       http.get(`http://localhost:${PORT}/api/health`, (res) => {
@@ -121,6 +141,7 @@ async function createWindow() {
 
 // ── IPC handlers ──────────────────────────────────────────────────────────────
 ipcMain.handle('get-user-data-path', () => app.getPath('userData'))
+ipcMain.handle('get-app-version', () => app.getVersion())
 
 const CALLBACK_BASE = 'https://jeremiegermond.github.io/BudgetApp/callback'
 
@@ -150,30 +171,58 @@ ipcMain.handle('open-bank-auth', (event, url) => {
 })
 
 // ── Auto-updater ──────────────────────────────────────────────────────────────
+function send(channel, payload) {
+  if (mainWindow && !mainWindow.isDestroyed()) {
+    mainWindow.webContents.send(channel, payload)
+  }
+}
+
 function setupAutoUpdater() {
   autoUpdater.autoDownload = true
   autoUpdater.autoInstallOnAppQuit = true
+  autoUpdater.logger = { info: log, warn: log, error: log, debug: () => {} }
 
-  autoUpdater.on('update-downloaded', () => {
-    dialog.showMessageBox(mainWindow, {
-      type: 'info',
-      title: 'Mise à jour disponible',
-      message: 'Une nouvelle version a été téléchargée.',
-      detail: 'L\'application va redémarrer pour appliquer la mise à jour.',
-      buttons: ['Redémarrer maintenant', 'Plus tard'],
-      defaultId: 0,
-    }).then(({ response }) => {
-      if (response === 0) autoUpdater.quitAndInstall()
-    })
+  autoUpdater.on('checking-for-update', () => send('updater:checking'))
+  autoUpdater.on('update-available', (info) => {
+    log('Update available:', info.version)
+    send('updater:available', { version: info.version })
+  })
+  autoUpdater.on('update-not-available', () => send('updater:none'))
+  autoUpdater.on('download-progress', (p) => {
+    send('updater:progress', { percent: Math.round(p.percent || 0) })
+  })
+  autoUpdater.on('update-downloaded', (info) => {
+    log('Update downloaded:', info.version)
+    send('updater:downloaded', { version: info.version })
+  })
+  autoUpdater.on('error', (e) => {
+    log('[updater error]', e.message)
+    send('updater:error', { message: e.message })
   })
 
-  autoUpdater.on('error', (e) => console.error('[updater]', e.message))
-  autoUpdater.checkForUpdatesAndNotify()
+  autoUpdater.checkForUpdates().catch(e => log('[updater] initial check failed:', e.message))
+  // Re-check every 4 hours while app stays open
+  setInterval(() => {
+    autoUpdater.checkForUpdates().catch(e => log('[updater] periodic check failed:', e.message))
+  }, 4 * 60 * 60 * 1000)
 }
+
+ipcMain.handle('updater:check', async () => {
+  try {
+    const r = await autoUpdater.checkForUpdates()
+    return { ok: true, version: r?.updateInfo?.version || null }
+  } catch (e) {
+    return { ok: false, error: e.message }
+  }
+})
+
+ipcMain.handle('updater:install', () => {
+  setImmediate(() => autoUpdater.quitAndInstall())
+})
 
 // ── App lifecycle ─────────────────────────────────────────────────────────────
 app.whenReady().then(async () => {
-  // In dev, backend is started manually — don't spawn a second instance
+  log(`Budget App v${app.getVersion()} starting (isDev=${isDev})`)
   if (!isDev) {
     startBackend()
   }
@@ -182,7 +231,11 @@ app.whenReady().then(async () => {
     await createWindow()
     if (!isDev) setupAutoUpdater()
   } catch (e) {
-    console.error('Startup failed:', e)
+    log('Startup failed:', e.message)
+    dialog.showErrorBox(
+      'Échec du démarrage',
+      `Le serveur interne n'a pas pu démarrer.\n\n${e.message}\n\nLogs : ${logFile}`
+    )
     app.quit()
   }
 })

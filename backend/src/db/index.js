@@ -1,11 +1,61 @@
-const Database = require('better-sqlite3')
-const path     = require('path')
+const path = require('path')
+const fs   = require('fs')
+const { Database: WasmDB } = require('node-sqlite3-wasm')
 require('dotenv').config()
 
 const dbPath = process.env.DB_PATH || path.join(__dirname, '../../../budget.db')
+
+// Clean up stale lock directory left by a previous crashed process.
+// node-sqlite3-wasm uses `<dbPath>.lock` as a mutex; orphaned dirs block startup.
+try { fs.rmSync(`${dbPath}.lock`, { recursive: true, force: true }) } catch {}
+
+// ── Compatibility layer: expose better-sqlite3-style API on top of node-sqlite3-wasm
+class Statement {
+  constructor(stmt) { this.stmt = stmt }
+  _params(args) { return args.length ? args : undefined }
+  get(...args)  { return this.stmt.get(this._params(args)) }
+  all(...args)  { return this.stmt.all(this._params(args)) }
+  run(...args)  { return this.stmt.run(this._params(args)) }
+}
+
+class Database {
+  constructor(file) {
+    this.raw = new WasmDB(file)
+    this.cache = new Map()
+  }
+  exec(sql)   { this.raw.exec(sql); return this }
+  pragma(s)   { this.raw.exec(`PRAGMA ${s}`); return this }
+  prepare(sql) {
+    let stmt = this.cache.get(sql)
+    if (!stmt) {
+      stmt = this.raw.prepare(sql)
+      this.cache.set(sql, stmt)
+    }
+    return new Statement(stmt)
+  }
+  transaction(fn) {
+    const raw = this.raw
+    return (...args) => {
+      raw.exec('BEGIN')
+      try {
+        const r = fn(...args)
+        raw.exec('COMMIT')
+        return r
+      } catch (e) {
+        try { raw.exec('ROLLBACK') } catch {}
+        throw e
+      }
+    }
+  }
+  close() {
+    for (const s of this.cache.values()) s.finalize()
+    this.cache.clear()
+    this.raw.close()
+  }
+}
+
 const db = new Database(dbPath)
 
-db.pragma('journal_mode = WAL')
 db.pragma('foreign_keys = ON')
 
 db.exec(`
@@ -96,13 +146,11 @@ if (count.c === 0) {
   ].forEach(([n,i,t]) => ins.run(n,i,t))
 }
 
-// Ensure the Virements transfer category exists
 const hasTransfer = db.prepare("SELECT id FROM categories WHERE is_transfer = 1").get()
 if (!hasTransfer) {
   db.prepare("INSERT INTO categories (name, icon, is_transfer) VALUES ('Virements', '↔️', 1)").run()
 }
 
-// Ensure Salaire category exists
 const hasSalaire = db.prepare("SELECT id FROM categories WHERE name = 'Salaire'").get()
 if (!hasSalaire) {
   db.prepare("INSERT INTO categories (name, icon, is_transfer) VALUES ('Salaire', '💼', 0)").run()

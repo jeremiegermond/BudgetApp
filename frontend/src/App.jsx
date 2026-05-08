@@ -5,6 +5,7 @@ import Transactions from './pages/Transactions.jsx'
 import Budget from './pages/Budget.jsx'
 import BankSync from './pages/BankSync.jsx'
 import RecurringPayments from './pages/RecurringPayments.jsx'
+import UpdateBanner from './components/UpdateBanner.jsx'
 import { getCategories, getTransactions, getBudget, getEBConnections, getRecurringForecast } from './services/api.js'
 
 const CATEGORY_COLORS = [
@@ -102,6 +103,8 @@ export default function App() {
           {toast.msg}
         </div>
       )}
+
+      <UpdateBanner />
     </Layout>
   )
 }

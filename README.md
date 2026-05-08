@@ -84,3 +84,40 @@ Toutes les banques françaises compatibles PSD2 : Société Générale, BNP Pari
 - Budget mensuel par catégorie avec barre de progression
 - Synchronisation bancaire automatique au démarrage
 - Mise à jour automatique de l'application
+
+---
+
+## Développement / build d'une release
+
+```bash
+npm install
+npm run install:all
+npm run dev               # mode développement
+npm run build:electron    # build release (dist-electron/)
+```
+
+Pas de prérequis particulier sur la version de Node — la base SQLite est en WebAssembly, donc aucune compilation native n'est nécessaire.
+
+## Publier une nouvelle release
+
+Tout est automatisé via GitHub Actions ([release.yml](.github/workflows/release.yml)).
+
+```bash
+git add .
+git commit -m "ce que tu changes"
+git push
+
+# Bump de la version + tag + push automatiques :
+npm run release:patch    # 1.1.3 → 1.1.4 (corrections)
+npm run release:minor    # 1.1.3 → 1.2.0 (nouvelles fonctionnalités)
+npm run release:major    # 1.1.3 → 2.0.0 (breaking changes)
+```
+
+Le push du tag déclenche automatiquement le workflow GitHub Actions qui :
+1. Build le frontend avec Vite
+2. Package l'app Electron pour Windows
+3. Crée une release GitHub avec le `.exe` et le `latest.yml` (utilisé par l'auto-updater)
+
+Les utilisateurs déjà installés verront la **pop-up de mise à jour** apparaître au prochain démarrage de l'app, qui télécharge et installe la nouvelle version automatiquement.
+
+**Prérequis côté GitHub** : dans les paramètres du repo → **Settings** → **Actions** → **General** → **Workflow permissions**, vérifier que **"Read and write permissions"** est coché (sinon le workflow ne pourra pas créer la release).
